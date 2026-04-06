@@ -1,30 +1,25 @@
+cat << 'EOF' > dashboard.py
 import requests
-import urllib3
 import time
+import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 url = "https://vlts.bihar.gov.in"
 
-# List of Public Proxies (Testing ke liye)
-# Agar ye fail ho, toh hum naye proxies dalenge
-proxies = {
-    "http": "http://43.134.33.12:80", 
-    "https": "http://43.134.33.12:80"
-}
-
-def proxy_bypass():
+def stealth_test():
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
     }
     try:
-        print(f"[*] Attempting Bypass via Proxy...")
-        # Proxy ke saath request bhej rahe hain
-        r = requests.get(url, headers=headers, proxies=proxies, timeout=15, verify=False)
-        print(f"[*] BYPASS SUCCESS! Status: {r.status_code}")
+        print(f"[*] Testing connection to {url}...")
+        # IPv4 force karne ke liye (if possible)
+        r = requests.get(url, headers=headers, timeout=15, verify=False)
+        print(f"[*] Success! Status: {r.status_code}")
     except Exception as e:
-        print(f"[!] Proxy Blocked or Offline: {type(e).__name__}")
+        print(f"[!] Blocked/Timeout: {e}")
 
 if __name__ == "__main__":
-    print("--- BIHAR VLTS PROXY DASHBOARD ---")
-    proxy_bypass()
+    print("--- BIHAR VLTS DASHBOARD ---")
+    stealth_test()
+EOF
