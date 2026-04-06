@@ -1,4 +1,3 @@
-cat << 'EOF' > dashboard.py
 import requests
 import time
 import urllib3
@@ -22,4 +21,3 @@ def stealth_test():
 if __name__ == "__main__":
     print("--- BIHAR VLTS DASHBOARD ---")
     stealth_test()
-EOF
