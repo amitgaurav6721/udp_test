@@ -5,29 +5,28 @@ import time
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 import os
 
 # --- Page Configuration ---
-st.set_page_config(page_title="GATLING NITRO V84", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="GATLING NITRO V85", page_icon="🚀", layout="wide")
 
-# --- CSS for Professional Look (Fixed for Python 3.14+) ---
+# --- Professional Dark UI ---
 st.markdown("""
     <style>
     .main { background-color: #050505; color: #00FF00; }
     div.stButton > button:first-child {
-        background-color: #004400; color: white; border-radius: 5px; font-weight: bold; width: 100%;
+        background-color: #004400; color: white; border-radius: 8px; font-weight: bold; width: 100%; height: 3.5em;
     }
     div.stMetric {
-        background-color: #111; padding: 15px; border-radius: 10px; border: 1px solid #222;
+        background-color: #111; padding: 20px; border-radius: 12px; border: 1px solid #333;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🚀 VLTS GATLING NITRO - V84")
-st.subheader("Enterprise Level Parallel Sync Engine")
+st.title("🚀 VLTS GATLING NITRO - V85")
+st.caption("Enterprise Cloud Sync Engine - High Speed Edition")
 
-# --- Session State Initializing ---
+# --- Session State Management ---
 if 'firing' not in st.session_state:
     st.session_state.firing = False
 if 'total_count' not in st.session_state:
@@ -35,7 +34,7 @@ if 'total_count' not in st.session_state:
 if 'last_portal_update' not in st.session_state:
     st.session_state.last_portal_update = "Waiting..."
 
-# --- Sidebar Configuration ---
+# --- Sidebar Inputs ---
 with st.sidebar:
     st.header("⚙️ Settings")
     tag = st.text_input("TAG", "EGAS")
@@ -49,7 +48,7 @@ with st.sidebar:
     threads = st.slider("CHROME THREADS", 1, 10, 6)
     refresh_rate = st.slider("SCRAPE INTERVAL (SEC)", 3, 10, 5)
 
-# --- Firing Packet Logic ---
+# --- Firing Packet Generator ---
 def generate_packet():
     now = datetime.now()
     d, t = now.strftime("%d%m%Y"), now.strftime("%H%M%S")
@@ -65,14 +64,11 @@ def firing_engine():
             sock.settimeout(5)
             sock.connect(target)
         while st.session_state.firing:
-            if mode == "UDP": sock.sendto(p_bytes, target)
-            else: sock.send(p_bytes)
+            sock.sendto(p_bytes, target) if mode == "UDP" else sock.send(p_bytes)
             st.session_state.total_count += 1
             time.sleep(0.001)
-    except:
-        pass
-    finally:
-        sock.close()
+    except: pass
+    finally: sock.close()
 
 # --- Scraper Engine ---
 def scraper_engine():
@@ -80,9 +76,7 @@ def scraper_engine():
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
     
-    # Check all possible Chrome paths on Streamlit Linux
     paths = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]
     for path in paths:
         if os.path.exists(path):
@@ -106,41 +100,39 @@ def scraper_engine():
                 
                 if res:
                     st.session_state.last_portal_update = res
+                    # Instant Kill Logic
                     sys_now = datetime.now()
-                    # Instant Kill Switch Logic
                     if sys_now.strftime("%d-%b-%Y").upper() in res.upper():
                         p_hour = res.split()[-1].split(':')[0]
                         if str(sys_now.hour).zfill(2) == p_hour:
                             st.session_state.firing = False
                             break
-            except:
-                pass
+            except: pass
             if not st.session_state.firing: break
-            time.sleep(2)
         driver.quit()
-    except Exception as e:
-        print(f"Scraper Error: {e}")
+    except: pass
 
-# --- Control Panel UI ---
+# --- UI Controls ---
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("🔥 START ENGINE", disabled=st.session_state.firing):
+    if st.button("🔥 START ENGINE", key="start", disabled=st.session_state.firing):
         st.session_state.firing = True
         st.session_state.total_count = 0
+        # Multi-threading trigger
         threading.Thread(target=firing_engine, daemon=True).start()
         for i in range(threads):
             threading.Thread(target=scraper_engine, daemon=True).start()
         st.rerun()
 
 with col2:
-    if st.button("🛑 STOP & RESET"):
+    if st.button("🛑 STOP & RESET", key="stop"):
         st.session_state.firing = False
         st.session_state.total_count = 0
         st.session_state.last_portal_update = "IDLE (RESET)"
         st.rerun()
 
-# --- Dashboard Display ---
+# --- Live Dashboard ---
 st.divider()
 m1, m2 = st.columns(2)
 with m1:
@@ -148,7 +140,7 @@ with m1:
 with m2:
     st.metric("Latest Portal Date", st.session_state.last_portal_update)
 
-# Auto-refresh UI while firing
+# UI Refresh while firing
 if st.session_state.firing:
-    time.sleep(2)
+    time.sleep(1) # Fast refresh
     st.rerun()
