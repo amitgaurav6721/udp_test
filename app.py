@@ -6,35 +6,38 @@ from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 import os
 
 # --- Page Configuration ---
-st.set_page_config(page_title="GATLING NITRO V82", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="GATLING NITRO V84", page_icon="🚀", layout="wide")
 
-# --- CSS for Professional Look ---
+# --- CSS for Professional Look (Fixed for Python 3.14+) ---
 st.markdown("""
     <style>
     .main { background-color: #050505; color: #00FF00; }
-    .stButton>button { width: 100%; border-radius: 5px; height: 3em; font-weight: bold; }
-    .stMetric { background-color: #111; padding: 15px; border-radius: 10px; border: 1px solid #222; }
+    div.stButton > button:first-child {
+        background-color: #004400; color: white; border-radius: 5px; font-weight: bold; width: 100%;
+    }
+    div.stMetric {
+        background-color: #111; padding: 15px; border-radius: 10px; border: 1px solid #222;
+    }
     </style>
-    """, unsafe_content_code=True)
+    """, unsafe_allow_html=True)
 
-st.title("🚀 VLTS GATLING NITRO - V82 (ENTERPRISE)")
-st.subheader("High-Speed Parallel Sync Engine")
+st.title("🚀 VLTS GATLING NITRO - V84")
+st.subheader("Enterprise Level Parallel Sync Engine")
 
-# --- Session State (Persistent Data) ---
+# --- Session State Initializing ---
 if 'firing' not in st.session_state:
     st.session_state.firing = False
 if 'total_count' not in st.session_state:
     st.session_state.total_count = 0
 if 'last_portal_update' not in st.session_state:
-    st.session_state.last_portal_update = "Waiting for data..."
+    st.session_state.last_portal_update = "Waiting..."
 
-# --- Sidebar Inputs ---
+# --- Sidebar Configuration ---
 with st.sidebar:
-    st.header("⚙️ Configuration")
+    st.header("⚙️ Settings")
     tag = st.text_input("TAG", "EGAS")
     imei = st.text_input("IMEI", "862567075041793")
     vno = st.text_input("VEHICLE NO", "BR04GA5974")
@@ -46,13 +49,13 @@ with st.sidebar:
     threads = st.slider("CHROME THREADS", 1, 10, 6)
     refresh_rate = st.slider("SCRAPE INTERVAL (SEC)", 3, 10, 5)
 
-# --- Packet Logic ---
+# --- Firing Packet Logic ---
 def generate_packet():
     now = datetime.now()
     d, t = now.strftime("%d%m%Y"), now.strftime("%H%M%S")
     return f"$PVT,{tag},2.1.1,NR,01,L,{imei},{vno},1,{d},{t},{lat},N,{lon},E,0.00,0.0,11,73,0.8,0.8,airtel,1,1,11.5,4.3,0,C,26,404,73,0a83,e3c8,e3c7,0a83,7,e3fb,0a83,7,c79d,0a83,10,e3f9,0a83,0,0001,00,000041,DDE3*"
 
-# --- Engines ---
+# --- Firing Engine ---
 def firing_engine():
     target = ("vlts.bihar.gov.in", 9999)
     p_bytes = generate_packet().encode('ascii')
@@ -66,20 +69,26 @@ def firing_engine():
             else: sock.send(p_bytes)
             st.session_state.total_count += 1
             time.sleep(0.001)
-    except Exception as e:
-        print(f"Firing Error: {e}")
+    except:
+        pass
     finally:
         sock.close()
 
+# --- Scraper Engine ---
 def scraper_engine():
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
-    # For Streamlit Cloud Chrome path
-    options.binary_location = "/usr/bin/chromium"
     
+    # Check all possible Chrome paths on Streamlit Linux
+    paths = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]
+    for path in paths:
+        if os.path.exists(path):
+            options.binary_location = path
+            break
+
     try:
         driver = webdriver.Chrome(options=options)
         while st.session_state.firing:
@@ -97,8 +106,8 @@ def scraper_engine():
                 
                 if res:
                     st.session_state.last_portal_update = res
-                    # Instant Kill Check
                     sys_now = datetime.now()
+                    # Instant Kill Switch Logic
                     if sys_now.strftime("%d-%b-%Y").upper() in res.upper():
                         p_hour = res.split()[-1].split(':')[0]
                         if str(sys_now.hour).zfill(2) == p_hour:
@@ -106,32 +115,32 @@ def scraper_engine():
                             break
             except:
                 pass
+            if not st.session_state.firing: break
             time.sleep(2)
         driver.quit()
     except Exception as e:
-        st.error(f"Scraper Error: {e}")
+        print(f"Scraper Error: {e}")
 
-# --- Control Panel ---
+# --- Control Panel UI ---
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("🔥 START ENGINE", type="primary", disabled=st.session_state.firing):
+    if st.button("🔥 START ENGINE", disabled=st.session_state.firing):
         st.session_state.firing = True
         st.session_state.total_count = 0
-        # Start Threads
         threading.Thread(target=firing_engine, daemon=True).start()
         for i in range(threads):
             threading.Thread(target=scraper_engine, daemon=True).start()
         st.rerun()
 
 with col2:
-    if st.button("🛑 STOP & RESET", type="secondary"):
+    if st.button("🛑 STOP & RESET"):
         st.session_state.firing = False
         st.session_state.total_count = 0
         st.session_state.last_portal_update = "IDLE (RESET)"
         st.rerun()
 
-# --- Dashboard View ---
+# --- Dashboard Display ---
 st.divider()
 m1, m2 = st.columns(2)
 with m1:
@@ -139,7 +148,7 @@ with m1:
 with m2:
     st.metric("Latest Portal Date", st.session_state.last_portal_update)
 
+# Auto-refresh UI while firing
 if st.session_state.firing:
-    st.warning("⚡ Engine is active. Live tracking enabled...")
     time.sleep(2)
     st.rerun()
