@@ -1,4 +1,2 @@
-streamlit
-streamlit-js-eval
-psycopg2-binary
-supabase
+chromium-browser
+chromium-chromedriver
