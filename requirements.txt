@@ -1,4 +1,3 @@
 streamlit
-streamlit-js-eval
-psycopg2-binary
-supabase
+selenium
+webdriver-manager
